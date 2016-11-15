@@ -1,5 +1,7 @@
+<?php 
+header("Refresh:5");
+?>
 <html>
-
 <head>
     <title>Graph Sleep Data</title>
     <script src="http://d3js.org/d3.v4.min.js" charset="utf-8"></script>
@@ -70,8 +72,12 @@
             stroke-width: 2;
         }
         
+        rect.disabled {
+            fill: transparent !important;
+        }
+        
         .overlay {
-            opacity:0;
+            opacity: 0;
             pointer-events: all;
         }
         
@@ -88,13 +94,22 @@
         h1 {
             text-align: center;
             font-family: 'Jura', sans-serif;
-            font-size: 36;
+            font-size: 36px;
         }
+        h2 {
+            color:dimgrey;
+            text-align: center;
+            font-family: 'Jura', sans-serif;
+            font-size: 26px;
+        }
+
     </style>
 </head>
 
 <body>
-    <div style="text-align:center; width:1000px; vertical-align:baseline"><h1>&nbsp;Graph of sleep data</h1></div>
+    <div style="text-align:center; width:1000px; vertical-align:baseline">
+        <h1>&nbsp;Graph of sleep data</h1>
+    
 
     <?php
             $servername = "localhost";
@@ -113,6 +128,10 @@
             $sql = "SELECT `timestamp`,`cal_acc_x`, `cal_acc_y`, `cal_acc_z` FROM $tablename WHERE sleep_id=$sleep_id";
 
             $result = $connection->query($sql);
+            $total_rows = 0;
+            $REM_rows = 0; // REM = high activity = light sleep
+            $threshold = 3.5;
+            $sleep_quality = 0; // 0 - 100
             if ($result->num_rows > 0) {
                 while($row = $result->fetch_assoc()) {
                     $data = new StdClass;
@@ -120,13 +139,34 @@
                     $data->x = (double)$row["cal_acc_x"] * 1000;
                     $data->y = (double)$row["cal_acc_y"] * 1000;
                     $data->z = (double)$row["cal_acc_z"] * 1000;
+                    $data->activity = sqrt(($data->x)**2 + ($data->y)**2 + ($data->z)**2);
                     $data_array[] = $data;
+                    if($data->activity >= $threshold){
+                        $REM_rows++;
+                    }
+                    $total_rows++;
                 }
+                $sleep_quality = (1 - ($REM_rows / $total_rows)) * 100;
+                echo "<h2> Sleep Quality : ".number_format($sleep_quality, 2)."%<br>";
+                $interval = date_diff(date_create(end((array_values($data_array)))->timestamp), date_create(reset((array_values($data_array)))->timestamp));
+                echo "Sleep Time : ".$interval->format("%h Hours %i Minutes %s Seconds")."</h2>";
             } else {
                 die("No data for sleep=".$sleep_id);
             }
+        
+            function dateDifference($date_1 , $date_2 , $differenceFormat = '%a' )
+            {
+                $datetime1 = date_create($date_1);
+                $datetime2 = date_create($date_2);
+
+                $interval = date_diff($datetime1, $datetime2);
+
+                return $interval->format($differenceFormat);
+
+            }
             $connection->close();
     ?>
+        </div>
 
         <svg id="visualisation"></svg>
 
@@ -156,9 +196,9 @@
                 return d.timestamp;
             }));
             var yScale = d3.scaleLinear().range([HEIGHT - MARGINS.top, MARGINS.bottom]).domain([d3.min(data.map(function(o) {
-                return Math.min(o.x, o.y, o.z);
+                return Math.min(o.x, o.y, o.z, o.activity);
             })), d3.max(data.map(function(o) {
-                return Math.max(o.x, o.y, o.z);
+                return Math.max(o.x, o.y, o.z, o.activity);
             }))]);
 
             var xAxis = d3.axisBottom().scale(xScale),
@@ -167,7 +207,7 @@
             xAxis.tickSize(MARGINS.top + MARGINS.bottom - HEIGHT); // Vertical Grid lines
 
             var color = d3.scaleOrdinal()
-                .range(['#BC4747', '#82BC47', '#474FBC'])
+                .range(['#BC4747', '#82BC47', '#474FBC', '#9a47bc'])
                 .domain(d3.keys(data[0]).filter(function(key) {
                     return key !== "timestamp";
                 }));
@@ -240,6 +280,9 @@
                 })
                 .attr("stroke", function(d) {
                     return color(d.axis);
+                })
+                .attr("stroke-width", function(d) {
+                    return (d.axis === "activity") ? 2 : .5;
                 })
                 .attr("fill", 'none');
 
@@ -337,7 +380,7 @@
                         return focusPosition(d.axis).toPrecision(3);
                     });
                     currentTimeText.text(formatDate(x0));
-                    if (mouseX >= WIDTH - 80){
+                    if (mouseX >= WIDTH - 80) {
                         focus.select("text").attr("x", "-45");
                     } else {
                         focus.select("text").attr("x", "9");
@@ -346,8 +389,8 @@
                     focus.attr("display", "none");
                     currentTimeText.attr("display", "none");
                 }
-                
-                
+
+
             }
 
             var legendRectSize = 18;
@@ -378,7 +421,7 @@
                 .text(function(d) {
                     return d.toUpperCase();
                 })
-            
+
             var overlay = vis.append("rect")
                 .attr("class", "overlay")
                 .attr("width", WIDTH)
@@ -396,7 +439,7 @@
                     mousemove(d3.event);
                     handleMouseMoveGraph(d3.event);
                 });
-            
+
         </script>
 
 </body>
