@@ -56,8 +56,7 @@
     }  
     $connection->query("UPDATE `sleep_round` SET end_time=TIMESTAMP(\"$data->timestamp\") WHERE ID=$sleep_round");
     
-    
-    echo "<p>Sleep Round =  ".$sleep_round."<br></p>";
+    echo "<p>#Sleep Round =  ".$sleep_round."#<br></p>";
     echo "<p>X Acceleration = ".$data->acc_x." LSB<br></p>";
     echo "<p>Y Acceleration = ".$data->acc_y." LSB<br></p>";
     echo "<p>Z Acceleration = ".$data->acc_z." LSB<br></p>";

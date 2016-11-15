@@ -24,7 +24,7 @@
         $result = $connection->query($sql);
         if($result !== FALSE){
             $row = $result->fetch_assoc();
-            echo "Sleep_round = ".$row["ID"]. " added.";
+            echo "#Sleep_round = ".$row["ID"]. "# added.";
         } else {
             echo "Error adding sleep round.";
         }

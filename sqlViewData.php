@@ -6,7 +6,6 @@ $sec = "10";
 
 <head>
     <title>View MySQL Data</title>
-    <meta http-equiv="refresh" content="<?php echo $sec?>;URL='<?php echo $page?>'">
 </head>
 
 <body>

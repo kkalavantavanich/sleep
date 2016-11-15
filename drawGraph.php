@@ -3,7 +3,7 @@
 <head>
     <title>Graph Sleep Data</title>
     <script src="http://d3js.org/d3.v4.min.js" charset="utf-8"></script>
-    <style>        
+    <style>
         @import url('https://fonts.googleapis.com/css?family=Jura');
         #visualization {
             height: 500px;
@@ -71,29 +71,30 @@
         }
         
         .overlay {
-            fill: none;
+            opacity:0;
             pointer-events: all;
         }
         
         .focus circle {
             fill: none;
         }
+        
         .focus text {
             font-family: 'Jura', sans-serif;
             font-size: 14;
             color: dimgray;
         }
+        
         h1 {
+            text-align: center;
             font-family: 'Jura', sans-serif;
             font-size: 36;
         }
-        
-
     </style>
 </head>
 
 <body>
-    <h1>&nbsp;Graph of sleep data</h1>
+    <div style="text-align:center; width:1000px; vertical-align:baseline"><h1>&nbsp;Graph of sleep data</h1></div>
 
     <?php
             $servername = "localhost";
@@ -116,9 +117,9 @@
                 while($row = $result->fetch_assoc()) {
                     $data = new StdClass;
                     $data->timestamp = $row["timestamp"];
-                    $data->x = (double)$row["cal_acc_x"];
-                    $data->y = (double)$row["cal_acc_y"];
-                    $data->z = (double)$row["cal_acc_z"];
+                    $data->x = (double)$row["cal_acc_x"] * 1000;
+                    $data->y = (double)$row["cal_acc_y"] * 1000;
+                    $data->z = (double)$row["cal_acc_z"] * 1000;
                     $data_array[] = $data;
                 }
             } else {
@@ -148,7 +149,7 @@
             var format = d3.timeParse("%Y-%m-%d %H:%M:%S");
             data.forEach(function(d) {
                 d.timestamp = format(d.timestamp);
-                console.log(d.timestamp)
+                console.log(d.timestamp + ":[" + d.x + "," + d.y + "," + d.z + "]")
             });
 
             var xScale = d3.scaleTime().range([MARGINS.left, WIDTH - MARGINS.right]).domain(d3.extent(data, function(d) {
@@ -167,7 +168,34 @@
 
             var color = d3.scaleOrdinal()
                 .range(['#BC4747', '#82BC47', '#474FBC'])
-                .domain(['x', 'y', 'z']);
+                .domain(d3.keys(data[0]).filter(function(key) {
+                    return key !== "timestamp";
+                }));
+
+            console.log(JSON.stringify(color.domain()));
+
+            var axes = color.domain().map(function(axis) {
+                return {
+                    axis: axis,
+                    values: data.map(function(d) {
+                        return {
+                            timestamp: d.timestamp,
+                            value: +(d[axis])
+                        };
+                    }),
+                    visible: true
+                };
+            });
+
+            console.log(JSON.stringify(color.domain()));
+
+            var line = d3.line()
+                .x(function(d) {
+                    return xScale(d.timestamp);
+                })
+                .y(function(d) {
+                    return yScale(d.value);
+                });
 
             vis.append("svg:g")
                 .attr("class", "x axis")
@@ -185,7 +213,7 @@
                 .attr("x", -HEIGHT / 2)
                 .attr("dy", "1em")
                 .style("text-anchor", "middle")
-                .text("Acceleration (m/s²)");
+                .text("Acceleration (mm/s²)");
 
             vis.append("text")
                 .attr("x", 101)
@@ -197,153 +225,92 @@
                 .style("text-anchor", "middle")
                 .text("Sleep = <?php echo $sleep_id?> ");
 
-            var lineGenX = d3.line()
-                .x(function(d) {
-                    return xScale(d.timestamp);
-                })
-                .y(function(d) {
-                    return yScale(d.x);
-                });
+            var accel = vis.selectAll(".accel")
+                .data(axes)
+                .enter().append("g")
+                .attr("class", "accel");
 
-            var lineGenY = d3.line()
-                .x(function(d) {
-                    return xScale(d.timestamp);
-                })
-                .y(function(d) {
-                    return yScale(d.y);
-                });
-
-            var lineGenZ = d3.line()
-                .x(function(d) {
-                    return xScale(d.timestamp);
-                })
-                .y(function(d) {
-                    return yScale(d.z);
-                });
-
-            vis.append("svg:path")
+            accel.append("path")
                 .attr("class", "path")
-                .attr('d', lineGenX(data))
-                .attr('stroke', color('x'))
-                .attr('stroke-width', 2)
-                .attr('fill', 'none');
-
-            vis.append("svg:path")
-                .attr("class", "path")
-                .attr('d', lineGenY(data))
-                .attr('stroke', color('y'))
-                .attr('stroke-width', 2)
-                .attr('fill', 'none');
-
-            vis.append("svg:path")
-                .attr("class", "path")
-                .attr('d', lineGenZ(data))
-                .attr('stroke', color('z'))
-                .attr('stroke-width', 2)
-                .attr('fill', 'none');
+                .attr("id", function(d) {
+                    return "line-" + d.axis.toUpperCase();
+                })
+                .attr("d", function(d) {
+                    return d.visible ? line(d.values) : null;
+                })
+                .attr("stroke", function(d) {
+                    return color(d.axis);
+                })
+                .attr("fill", 'none');
 
             var hoverContainer, hoverLine, hoverLineGroup;
 
             hoverLineGroup = vis.append("svg:g")
                 .attr("class", "hover-line");
-            // add the line to the group
             hoverLine = hoverLineGroup
                 .append("svg:line")
-                .attr("x1", 10).attr("x2", 10) // vertical line so same value on each
-                .attr("y1", 0).attr("y2", HEIGHT) // top to bottom	
+                .attr("x1", 10).attr("x2", 10)
+                .attr("y1", 0).attr("y2", HEIGHT)
                 .attr('stroke', 'GREY')
                 .attr('stroke-width', 0);
 
-            // hide it by default
             hoverLine.classed("hide", true);
 
-            var overlay = vis.append("rect")
-                .attr("class", "overlay")
-                .attr("width", WIDTH)
-                .attr("height", HEIGHT)
-                .on("mouseover", function(event) {
-                    focusX.style("display", null);
-                    focusY.style("display", null);
-                    focusZ.style("display", null);
-                })
-                .on("mouseout", function(event) {
-                    focusX.style("display", "none");
-                    focusY.style("display", "none");
-                    focusZ.style("display", "none");
-                    handleMouseOutGraph(d3.event);
-                })
-                .on("mousemove", function(event) {
-                    mousemove(d3.event);
-                    handleMouseOverGraph(d3.event);
-                });
-
-            var handleMouseOverGraph = function(event) {
+            var handleMouseMoveGraph = function(event) {
                     var mouseX = d3.event.layerX - 6;
                     var mouseY = d3.event.layerY - 6;
 
                     if (mouseX >= 60 && mouseX <= WIDTH && mouseY >= 0 && mouseY <= HEIGHT) {
-                        // show the hover line
                         hoverLine.classed("hide", false);
                         hoverLine.attr('stroke-width', 1);
-
-                        // set position of hoverLine
                         hoverLine.attr("x1", mouseX).attr("x2", mouseX);
 
                     } else {
-                        // proactively act as if we've left the area since we're out of the bounds we want
                         handleMouseOutGraph(event);
                     }
                 } //end handleMouseOverGraph
 
             var handleMouseOutGraph = function(event) {
                 console.log("MouseOut graph")
-                    // hide the hover-line
                 hoverLine.classed("hide", true);
                 hoverLine.attr('stroke-width', 0);
             }
+
+            var focus = vis.selectAll(".focus")
+                .data(color.domain().map(function(axis) {
+                    return {
+                        axis: axis
+                    };
+                }))
+                .enter().append("g")
+                .attr("class", "focus");
+
+            focus.append('circle')
+                .attr("r", 4.5)
+                .attr("stroke", function(d) {
+                    return color(d.axis);
+                });
+
+            focus.append('text')
+                .attr("x", 9)
+                .attr("y", -9)
+                .attr("dy", ".35em");
 
             var bisectDate = d3.bisector(function(d) {
                 return d.timestamp;
             }).left;
 
-            var focusX = vis.append("g")
-                .attr("class", "focus")
-                .style("display", "none");
+            var formatDate = d3.timeFormat("%a %d %b %Y   %H:%M:%S");
 
-            focusX.append("circle")
-                .attr("r", 4.5)
-                .attr("stroke", color('x'));
-
-            focusX.append("text")
-                .attr("x", 9)
-                .attr("y", -9)
-                .attr("dy", ".35em");
-            
-            var focusY = vis.append("g")
-                .attr("class", "focus")
-                .style("display", "none");
-
-            focusY.append("circle")
-                .attr("r", 4.5)
-                .attr("stroke", color('y'));
-
-            focusY.append("text")
-                .attr("x", 9)
-                .attr("y", -9)
-                .attr("dy", ".35em");
-            
-            var focusZ = vis.append("g")
-                .attr("class", "focus")
-                .style("display", "none");
-
-            focusZ.append("circle")
-                .attr("r", 4.5)
-                .attr("stroke", color('z'));
-
-            focusZ.append("text")
-                .attr("x", 9)
-                .attr("y", -9)
-                .attr("dy", ".35em");
+            var currentTimeText = vis.append("text")
+                .attr("x", 800)
+                .attr("y", 17)
+                .attr("align", "center")
+                .attr("font-size", "14px")
+                .attr("font-family", "'Jura', sans-serif")
+                .attr("dy", "1em")
+                .attr("display", "none")
+                .text("");
 
             function mousemove(event) {
                 var mouseX = d3.event.layerX - 6,
@@ -353,32 +320,36 @@
                     d0 = data[i - 1],
                     d1 = data[i];
                 var span = (xScale(d1.timestamp) - xScale(d0.timestamp)),
-                    weight = (xScale(x0) - xScale(d0.timestamp))/span;
-                    dx = (d1.x * weight) + (d0.x * (1.0 - weight)),
-                    dy = (d1.y * weight) + (d0.y * (1.0 - weight)),
-                    dz = (d1.z * weight) + (d0.z * (1.0 - weight));
-            
+                    weight = (xScale(x0) - xScale(d0.timestamp)) / span;
+                var focusPosition = function(axis) {
+                    return (+(d1[axis]) * weight) + (+(d0[axis]) * (1.0 - weight));
+                };
+
                 if (mouseX >= 60 && mouseX <= WIDTH && mouseY >= 0 && mouseY <= HEIGHT) {
-                        focusX.attr("display", null);
-                        focusY.attr("display", null);
-                        focusZ.attr("display", null);
-                        currentTimeText.attr("display", null);
-                        focusX.attr("transform", "translate(" + xScale(x0) + "," + yScale(dx) + ")");
-                        focusX.select("text").text(dx.toPrecision(3));
-                        focusY.attr("transform", "translate(" + xScale(x0) + "," + yScale(dy) + ")");
-                        focusY.select("text").text(dy.toPrecision(3));
-                        focusZ.attr("transform", "translate(" + xScale(x0) + "," + yScale(dz) + ")");
-                        focusZ.select("text").text(dz.toPrecision(3));
-                        currentTimeText.text(formatDate(x0));
+                    focus.attr("display", null);
+                    currentTimeText.attr("display", null);
+
+                    focus.attr("transform", function(d) {
+                        return "translate(" + xScale(x0) + "," + yScale(focusPosition(d.axis)) + ")";
+                    });
+
+                    focus.select("text").text(function(d) {
+                        return focusPosition(d.axis).toPrecision(3);
+                    });
+                    currentTimeText.text(formatDate(x0));
+                    if (mouseX >= WIDTH - 80){
+                        focus.select("text").attr("x", "-45");
                     } else {
-                        focusX.attr("display", "none");
-                        focusY.attr("display", "none");
-                        focusZ.attr("display", "none");
-                        currentTimeText.attr("display", "none");
+                        focus.select("text").attr("x", "9");
                     }
+                } else {
+                    focus.attr("display", "none");
+                    currentTimeText.attr("display", "none");
+                }
+                
                 
             }
-            
+
             var legendRectSize = 18;
             var legendSpacing = 4;
 
@@ -408,18 +379,24 @@
                     return d.toUpperCase();
                 })
             
-            var currentTimeText = vis.append("text")
-                .attr("x", 800  )
-                .attr("y", 17)
-                .attr("align", "center")
-                .attr("font-size", "14px")
-                .attr("font-family", "'Jura', sans-serif")
-                .attr("dy", "1em")
-                .attr("display", "none")
-                .text("");
+            var overlay = vis.append("rect")
+                .attr("class", "overlay")
+                .attr("width", WIDTH)
+                .attr("height", HEIGHT)
+                .on("mouseover", function(event) {
+                    focus.style("display", null);
+                    currentTimeText.style("display", null);
+                })
+                .on("mouseout", function(event) {
+                    focus.style("display", "none");
+                    currentTimeText.style("display", "none");
+                    handleMouseOutGraph(d3.event);
+                })
+                .on("mousemove", function(event) {
+                    mousemove(d3.event);
+                    handleMouseMoveGraph(d3.event);
+                });
             
-            var formatDate = d3.timeFormat("%a %d %b %Y   %H:%M:%S");
-
         </script>
 
 </body>
